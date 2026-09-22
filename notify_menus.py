@@ -152,7 +152,7 @@ def select_updates(report, sent, today):
 def render_email(updates, report):
     subject = f"[MSU] 起司蛋糕菜單更新：{len(updates)} 筆候選"
     text = [f"查詢週期：{report['start']} 至 {report['end']}（MSU 當地日期）", "", "以下是新增或變更的菜單紀錄；品名分類不是人工確認，現場可能換菜或售完。"]
-    body = ["<html><body style='font-family:Arial,sans-serif;color:#183d32;line-height:1.6'>", "<h1>MSU 起司蛋糕菜單更新</h1>", f"<p>{html.escape(text[0])}</p><p>{html.escape(text[2])}</p>"]
+    body = ["<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'></head><body style='font-family:Arial,sans-serif;color:#183d32;line-height:1.6'>", "<h1>MSU 起司蛋糕菜單更新</h1>", f"<p>{html.escape(text[0])}</p><p>{html.escape(text[2])}</p>"]
     for kind, label in [(KINDS[0], "起司蛋糕候選"), (KINDS[1], "相關甜點，請另行確認（可能是冰淇淋等）")]:
         rows = [entry["row"] for entry in updates.values() if entry["row"]["kind"] == kind]
         if not rows:

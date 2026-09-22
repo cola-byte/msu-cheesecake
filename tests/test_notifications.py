@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from filter_menus import classify
-from notify_menus import LocalState, GitHubState, deliver, digest, render_email, select_updates, smtp_config
+from notify_menus import LocalState, GitHubState, deliver, digest, render_email, select_updates, smtp_config, send_email
 
 
 def record(**changes):
@@ -86,6 +86,7 @@ class Notifications(unittest.TestCase):
         _, _, body = render_email(updates, report())
         self.assertIn("&lt;script&gt;", body)
         self.assertNotIn("<script>", body)
+        self.assertIn("charset='utf-8'", body)
         updates = select_updates(report([record(menu_url="https://example.invalid/")]), {}, date(2026, 9, 22))
         with self.assertRaises(ValueError):
             render_email(updates, report())
@@ -108,6 +109,34 @@ class Notifications(unittest.TestCase):
             state["recipients"]["r"] = {"sent": {}}
             store.save(state)
             self.assertEqual(store.read(), state)
+
+    def test_smtp_uses_tls_authentication_and_two_message_formats(self):
+        config = {"host": "smtp.example.test", "port": 587, "username": "from@example.test", "password": "fake",
+                  "sender": "from@example.test", "recipients": ["to@example.test"], "security": "starttls"}
+        with patch("notify_menus.smtplib.SMTP") as factory:
+            smtp = factory.return_value
+            smtp.send_message.return_value = {}
+            send_email(config, "測試", "plain text", "<p>HTML</p>")
+            smtp.starttls.assert_called_once()
+            smtp.login.assert_called_once_with("from@example.test", "fake")
+            message = smtp.send_message.call_args.args[0]
+            self.assertEqual(message["To"], "to@example.test")
+            self.assertEqual(message.get_content_type(), "multipart/alternative")
+
+    def test_failed_final_save_keeps_persisted_pending_for_manual_resolution(self):
+        state = {"version": 1, "recipients": {}}
+        snapshots = []
+        def save(value):
+            if snapshots:
+                raise RuntimeError("state update unavailable after SMTP accepted")
+            snapshots.append(deepcopy(value))
+        store, sender = Mock(), Mock()
+        store.save.side_effect = save
+        updates = select_updates(report(), {}, date(2026, 9, 22))
+        with self.assertRaises(RuntimeError):
+            deliver(store, state, "r", updates, {}, ("s", "t", "h"), date(2026, 9, 22), sender)
+        sender.assert_called_once()
+        self.assertEqual(len(snapshots[0]["recipients"]["r"]["pending"]["items"]), 1)
 
     def test_github_state_initializes_branch_and_uses_blob_sha(self):
         with patch.dict("os.environ", {"GITHUB_REPOSITORY": "owner/repo", "GITHUB_TOKEN": "fake", "GITHUB_SHA": "a" * 40}):
