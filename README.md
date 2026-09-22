@@ -2,7 +2,7 @@
 
 抓取 Michigan State University 的公開餐廳菜單，完整保存後，再找出起司蛋糕及相關甜點候選。可以在本機手動查詢，也可以使用 GitHub Actions 每天自動查詢並寄信。
 
-**只想每天收信：**請看 [自動寄信設定](docs/email-setup.md)。設定完成並啟用後，電腦不用保持開機。
+**第一次使用：**請看 [一步一步操作指南（含 git clone 和啟用寄信）](docs/quick-start.md)。設定完成並啟用後，電腦不用保持開機。進階設定見 [自動寄信設定](docs/email-setup.md)。
 
 ## 第一次使用
 
