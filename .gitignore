@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+.DS_Store
+Thumbs.db
+
+# Local menus and reports are kept on disk, not uploaded.
+/probe-output/
+/*-output/
+/dist/
+
+# Downloaded files used during the initial investigation.
+nutrislice-shell.html
+nutrislice-main.js
+brody-lunch-week.json
+schools.json
+menu-types.json
