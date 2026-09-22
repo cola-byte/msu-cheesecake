@@ -1,0 +1,83 @@
+name: MSU menu email
+
+on:
+  schedule:
+    - cron: '17 7 * * *'
+      timezone: America/Detroit
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'preview: no email; test-email: test SMTP; send: check and notify; retry-pending: may resend an uncertain delivery'
+        type: choice
+        default: preview
+        options:
+          - preview
+          - test-email
+          - send
+          - retry-pending
+          - acknowledge-pending
+
+permissions:
+  contents: write
+
+concurrency:
+  group: msu-menu-email
+  cancel-in-progress: false
+
+jobs:
+  menus:
+    if: github.event_name == 'workflow_dispatch' || vars.EMAIL_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONUTF8: '1'
+      MODE: ${{ inputs.mode || 'send' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Test notification rules
+        run: python -m unittest discover -s tests -v
+      - name: Check email configuration
+        if: env.MODE != 'preview'
+        env:
+          SMTP_HOST: ${{ vars.SMTP_HOST || 'smtp.gmail.com' }}
+          SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
+          SMTP_SECURITY: ${{ vars.SMTP_SECURITY || 'starttls' }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME || vars.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO || vars.EMAIL_TO }}
+        run: python -c "from notify_menus import smtp_config; smtp_config(); print('Email settings present.')"
+      - name: Download current MSU week
+        if: env.MODE != 'test-email' && env.MODE != 'acknowledge-pending'
+        run: python -u probe_menus.py --refresh
+      - name: Preview or send notification
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SMTP_HOST: ${{ vars.SMTP_HOST || 'smtp.gmail.com' }}
+          SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
+          SMTP_SECURITY: ${{ vars.SMTP_SECURITY || 'starttls' }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME || vars.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO || vars.EMAIL_TO }}
+        run: python notify_menus.py --state-backend github --mode "$MODE"
+      - name: Email a failure notice
+        if: failure() && env.MODE != 'preview'
+        env:
+          SMTP_HOST: ${{ vars.SMTP_HOST || 'smtp.gmail.com' }}
+          SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
+          SMTP_SECURITY: ${{ vars.SMTP_SECURITY || 'starttls' }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME || vars.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO || vars.EMAIL_TO }}
+        run: python notify_menus.py --mode failure
+      - name: Preserve menus and email preview
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: msu-menu-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: probe-output/
+          retention-days: 7
+          compression-level: 9
+          if-no-files-found: ignore

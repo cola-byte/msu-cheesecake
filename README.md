@@ -1,6 +1,8 @@
 # MSU 起司蛋糕菜單查詢
 
-抓取 Michigan State University 的公開餐廳菜單，完整保存後，再找出起司蛋糕及相關甜點候選。這是手動執行的本機工具，目前沒有自動排程或寄信功能。
+抓取 Michigan State University 的公開餐廳菜單，完整保存後，再找出起司蛋糕及相關甜點候選。可以在本機手動查詢，也可以使用 GitHub Actions 每天自動查詢並寄信。
+
+**只想每天收信：**請看 [自動寄信設定](docs/email-setup.md)。設定完成並啟用後，電腦不用保持開機。
 
 ## 第一次使用
 
@@ -31,7 +33,7 @@ macOS / Linux：
 python3 probe_menus.py --start 2026-09-21 --refresh
 ```
 
-**請把 `2026-09-21` 換成你要查詢那一週的星期一。** 這只是日期範例；程式目前不會自動計算本週。查詢日期以 MSU 當地日期理解。
+**請把 `2026-09-21` 換成你要查詢那一週的星期一。** 也可以省略 `--start`，程式會依 MSU 時區自動計算當週星期一。若 Windows 顯示缺少時區資料，可繼續明確指定日期，或執行 `python -m pip install tzdata`。
 
 這行指令會重新抓取全部公開餐廳，從指定日期開始查詢 7 天，保存全部品項並分類候選。
 
@@ -124,3 +126,19 @@ python probe_menus.py --help
 目前已在 Windows / Python 3.13 實測。macOS / Linux 指令是對應的使用方式，尚未在這兩個平台實跑驗證。
 
 網站 API 與日期邊界說明見 [技術筆記](docs/technical-notes.md)。
+
+## 預覽郵件與執行測試
+
+抓完菜單後，先產生信件預覽，不會寄信：
+
+```powershell
+python notify_menus.py --mode preview
+```
+
+用瀏覽器開啟 `probe-output/email-preview.html`。預覽顯示本週今天起的候選，不會寫入已寄送紀錄。
+
+執行測試（不會寄信）：
+
+```powershell
+python -m unittest discover -s tests -v
+```

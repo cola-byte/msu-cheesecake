@@ -8,6 +8,7 @@ from pathlib import Path
 import time
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from filter_menus import filter_records, write_review
 
 BASE = "https://msu.api.nutrislice.com"
@@ -88,7 +89,7 @@ def inspect_week(school, meal, anchor, start, end, cache, refresh, offline=False
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--start", required=True, type=date.fromisoformat, help="First MSU-local calendar date, YYYY-MM-DD")
+    parser.add_argument("--start", type=date.fromisoformat, help="First MSU-local date; defaults to Monday of the current MSU week")
     parser.add_argument("--days", type=int, default=7)
     parser.add_argument("--locations", nargs="*", help="Optional exact restaurant slugs; otherwise all published locations")
     parser.add_argument("--refresh", action="store_true", help="Download again instead of reusing saved evidence")
@@ -99,11 +100,17 @@ def main():
         parser.error("--offline and --refresh cannot be combined")
     if not 1 <= args.days <= 14:
         parser.error("--days must be between 1 and 14")
+    if args.start is None:
+        try:
+            today = datetime.now(ZoneInfo("America/Detroit")).date()
+        except ZoneInfoNotFoundError:
+            parser.error("Timezone data unavailable. Use --start YYYY-MM-DD or install tzdata: python -m pip install tzdata")
+        args.start = today - timedelta(days=today.weekday())
     start, end = args.start, args.start + timedelta(days=args.days - 1)
     out = args.output
     cache = out / "raw"
     schools = get_json(BASE + "/menu/api/schools/", cache / "schools.json", args.refresh, args.offline)
-    if not isinstance(schools, list):
+    if not isinstance(schools, list) or not schools:
         raise ValueError("Unexpected location list schema")
     if args.locations:
         unknown = set(args.locations) - {s["slug"] for s in schools}
@@ -113,6 +120,8 @@ def main():
     # Nutrislice returns Sunday-Saturday weeks. Cover both API weeks when needed.
     anchors = sorted({start + timedelta(days=i) - timedelta(days=(start + timedelta(days=i)).isoweekday() % 7) for i in range(args.days)})
     jobs = [(s, m, a) for s in schools for m in s["active_menu_types"] for a in anchors]
+    if not jobs:
+        parser.error("No active menu sources were returned; cannot verify the menus")
     results = []
     print(f"Inspecting {len(schools)} locations, {len(jobs)} weekly menu sources, {start} to {end}; offline={args.offline}", flush=True)
     with ThreadPoolExecutor(max_workers=2) as pool:
